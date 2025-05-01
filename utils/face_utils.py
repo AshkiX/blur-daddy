@@ -20,6 +20,9 @@ def detect_faces(image):
     return boxes, probs, landmarks
 
 def get_face_angle(landmarks):
+    """
+    Get the angle of a face based on its landmarks.
+    """
     left_eye, right_eye = landmarks[0], landmarks[1]
     dx = right_eye[0] - left_eye[0]
     dy = right_eye[1] - left_eye[1]

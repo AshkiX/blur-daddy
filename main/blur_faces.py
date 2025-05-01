@@ -51,14 +51,14 @@ def process_input(file_path: str, logger: dict):
 
         with timed_section("Blurring time", logger):
             if boxes is not None:
-                for box, landmark in zip(boxes, landmarks):
-                    if args.method == 'gaussian':
-                        frame = apply_rect_gaussian_blur(frame, box)
-                    elif args.method == 'elliptical':
-                        angle = get_face_angle(landmark)
-                        frame = apply_elliptical_gaussian_blur(frame, box, angle)
-                    else:
-                        frame = apply_rect_pixelation(frame, box)
+                if args.method == 'gaussian':
+                    frame = apply_rect_gaussian_blur(frame, boxes)
+                elif args.method == 'elliptical':
+                    frame = apply_elliptical_gaussian_blur(frame, boxes, landmarks)
+                elif args.method == 'pixelation':
+                    frame = apply_rect_pixelation(frame, boxes)
+                else:
+                    raise ValueError(f"Unsupported method. Supported methods: gaussian, elliptical, pixelation.")
         
         output_frames.append(frame)
 

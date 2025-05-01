@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+from utils.face_utils import get_face_angle
+
 PADDING = 15
 
 def get_padded_clamped_box(image_shape, box):
@@ -15,57 +17,53 @@ def get_padded_clamped_box(image_shape, box):
     y2 = min(img_h, y2 + PADDING)
     return (x1, y1, x2, y2)
 
-def apply_rect_gaussian_blur(image, box):
+def apply_rect_gaussian_blur(image: np.ndarray, boxes: list[tuple[int, int, int, int]]):
     """
-    Apply a Gaussian blur to a box in an image.
+    Apply a Gaussian blur to a boxes in an image.
     """
-    x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
-    region = image[y1:y2, x1:x2]
-    blurred = cv2.GaussianBlur(region, (21, 21), 15)
-    image[y1:y2, x1:x2] = blurred
+    for box in boxes:
+        x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
+        region = image[y1:y2, x1:x2]
+        blurred = cv2.GaussianBlur(region, (21, 21), 15)
+        image[y1:y2, x1:x2] = blurred
     return image
 
-def apply_rect_pixelation(image, box, blocks=10):
+def apply_rect_pixelation(image, boxes, blocks=10):
     """
-    Pixelate a box in an image.
+    Pixelate a boxes in an image.
     """
-    x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
-    region = image[y1:y2, x1:x2]
-    h, w = region.shape[:2]
-    temp = cv2.resize(region, (blocks, blocks), interpolation=cv2.INTER_LINEAR)
-    pixelated = cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
-    image[y1:y2, x1:x2] = pixelated
+    for box in boxes:
+        x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
+        region = image[y1:y2, x1:x2]
+        h, w = region.shape[:2]
+        temp = cv2.resize(region, (blocks, blocks), interpolation=cv2.INTER_LINEAR)
+        pixelated = cv2.resize(temp, (w, h), interpolation=cv2.INTER_NEAREST)
+        image[y1:y2, x1:x2] = pixelated
     return image
 
-def apply_elliptical_gaussian_blur(image, box, angle):
+def apply_elliptical_gaussian_blur(image, boxes, landmarks):
     """
-    Apply an elliptical Gaussian blur to a box in an image.
+    Apply an elliptical Gaussian blur to a boxes in an image.
     """
-    x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
-    
-    cx = (x1 + x2) // 2
-    cy = (y1 + y2) // 2
-    w = x2 - x1
-    h = y2 - y1
-
-    mask = create_soft_ellipse_mask(image.shape, (cx, cy), (w // 2, h // 2), angle)
-    # Save the mask as an image
-    # cv2.imwrite(f"../output/mask_{cx}_{cy}.png", mask)
-
     blurred = cv2.GaussianBlur(image, (21, 21), 15)
+    mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
 
-    final = blend_images(image, blurred, mask)
-    return final
+    for box, landmark in zip(boxes, landmarks):
+        angle = get_face_angle(landmark)
+        x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
+        
+        cx = (x1 + x2) // 2
+        cy = (y1 + y2) // 2
+        w = x2 - x1
+        h = y2 - y1
 
-def create_soft_ellipse_mask(image_shape, center, axes, angle, feather_amount=41):
-    """
-    Create a soft elliptical mask for a given image shape, center, axes, and angle.
-    """
-    mask = np.zeros((image_shape[0], image_shape[1]), dtype=np.uint8)
-    cv2.ellipse(mask, center, axes, angle, 0, 360, (255), -1)
+        cv2.ellipse(mask, (cx, cy), (w // 2, h // 2), angle, 0, 360, (255), -1)
 
-    mask = cv2.GaussianBlur(mask, (feather_amount, feather_amount), 0)
-    return mask
+    mask = cv2.GaussianBlur(mask, (41, 41), 0)
+    image = blend_images(image, blurred, mask)
+
+    return image
+
 
 def blend_images(original, blurred, mask):
     """
