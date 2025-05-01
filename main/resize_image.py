@@ -1,6 +1,6 @@
 import cv2
 import argparse
-from utils.resize_utils import resize_image
+from utils.image_utils import resize_image
 
 def main(args):
     image = cv2.imread(args.input)

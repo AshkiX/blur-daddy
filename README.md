@@ -13,7 +13,7 @@ Blur Daddy is an open-source tool designed to enable precise face-blurring in ph
    - Implemented face detection and blurring in static images.
    - Supports Gaussian blur and pixelation methods.
 
-2. ⬜ **Milestone 2: Video Blurring Support (Frame-by-Frame)**
+2. ✅ **Milestone 2: Video Blurring Support (Frame-by-Frame)**
    - Extend functionality to support video files, processing each frame individually.
 
 3. ⬜ **Milestone 3: Face Tracking & ID Assignment for Videos**
@@ -53,3 +53,8 @@ python main/blur_faces.py --input path/to/your/image.jpg --output path/to/save/b
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgements
+
+Sample video footage used for testing and demonstration purposes is sourced from:
+- YouTube: [https://www.youtube.com/watch?v=_ofEQYA2V58](https://www.youtube.com/watch?v=_ofEQYA2V58)
