@@ -1,7 +1,7 @@
 import cv2
 import argparse
 from utils.benchmark_utils import timed_section, get_memory_usage
-from utils.face_utils import detect_faces, get_face_angle
+from utils.face_utils import detect_faces_mtcnn, detect_faces_yolo
 from utils.blur_utils import apply_rect_gaussian_blur, apply_rect_pixelation, apply_elliptical_gaussian_blur
 from utils.image_utils import read_image, save_image
 from utils.video_utils import extract_frames, get_video_metadata, write_video
@@ -25,7 +25,7 @@ def is_video_file(path: str):
     return path.endswith(SUPPORTED_VIDEO_FORMATS)
 
 
-def process_input(file_path: str, logger: dict):
+def process_input(file_path: str, model: str, logger: dict):
     frames = []
 
     if is_image_file(args.input):
@@ -45,7 +45,12 @@ def process_input(file_path: str, logger: dict):
     for i, frame in enumerate(tqdm(frames, desc="Processing frames", total=len(frames))):
         image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         with timed_section("Face detection time", logger):
-            boxes, _, landmarks = detect_faces(image_rgb)
+            if model == "mtcnn":
+                boxes, _, landmarks = detect_faces_mtcnn(image_rgb)
+            elif model == "yolov8n-face":
+                boxes, _, landmarks = detect_faces_yolo(image_rgb)
+            else:
+                raise ValueError(f"Unsupported model. Supported models: mtcnn, yolov8n-face.")
         if DEBUG:
             print(f"Detected {len(boxes) if boxes is not None else 0} faces in the frame {i+1}.")
 
@@ -74,7 +79,7 @@ def main(args):
     logger = {}
 
     with timed_section("Total processing time", logger):
-        logger = process_input(args.input, logger)
+        logger = process_input(args.input, args.model, logger)
     
     print(f"Saved output to {args.output}")
 
@@ -89,6 +94,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", type=str, required=True, help="Path to the input file.")
     parser.add_argument("--output", type=str, required=True, help="Path to save the output file.")
     parser.add_argument("--method", type=str, default="gaussian", choices=["gaussian", "elliptical", "pixelation"], help="Blurring method.")
+    parser.add_argument("--model", type=str, default="yolov8n-face", choices=["yolov8n-face", "mtcnn"], help="Model to use for face detection.")
     args = parser.parse_args()
     main(args)
     

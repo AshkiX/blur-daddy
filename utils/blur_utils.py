@@ -48,8 +48,11 @@ def apply_elliptical_gaussian_blur(image, boxes, landmarks):
     blurred = cv2.GaussianBlur(image, (21, 21), 15)
     mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
 
+    if landmarks is None:
+        landmarks = [None] * len(boxes)
+
     for box, landmark in zip(boxes, landmarks):
-        angle = get_face_angle(landmark)
+        angle = get_face_angle(landmark) if landmark is not None else 0
         x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
         
         cx = (x1 + x2) // 2
