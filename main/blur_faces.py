@@ -25,7 +25,7 @@ def is_video_file(path: str):
     return path.endswith(SUPPORTED_VIDEO_FORMATS)
 
 
-def process_input(file_path: str, model: str, logger: dict):
+def process_input(file_path: str, output_file: str, logger: dict):
     frames = []
 
     if is_image_file(args.input):
@@ -69,9 +69,9 @@ def process_input(file_path: str, model: str, logger: dict):
 
     with timed_section("Output time", logger):
         if len(output_frames) == 1:
-            save_image(output_frames[0], f"../output/{args.output}")
+            save_image(output_frames[0], output_file)
         else:
-            write_video(output_frames, f"../output/{args.output}", fps, size)
+            write_video(output_frames, output_file, fps, size)
     
     return logger
 
@@ -79,7 +79,7 @@ def main(args):
     logger = {}
 
     with timed_section("Total processing time", logger):
-        logger = process_input(args.input, args.model, logger)
+        logger = process_input(args.input, args.output, logger)
     
     print(f"Saved output to {args.output}")
 
