@@ -52,10 +52,21 @@ class TextRedirector:
     def __init__(self, text_widget):
         self.text_widget = text_widget
         self.buffer = ''
+        self.cr = False
 
     def write(self, s):
         self.text_widget.configure(state='normal')
-        self.text_widget.insert("end", s)
+        for char in s:
+            if char == '\r':
+                self.cr = True
+            else:
+                if self.cr:
+                    # Delete the last line
+                    self.text_widget.delete("end-1c linestart", "end")
+                    self.text_widget.insert("end-1l", "\n")  # Ensure new line context
+                    self.text_widget.mark_set("insert", "end-1l")
+                self.cr = False
+                self.text_widget.insert("end", char)
         self.text_widget.see(tk.END)  # Auto-scroll
         self.text_widget.configure(state='disabled')
 
@@ -66,7 +77,7 @@ class TextRedirector:
 class BlurApp:
     def __init__(self, root):
         self.root = root
-        root.title("Blur Tool")
+        root.title("Blur Daddy")
         root.geometry("700x600")
         self.input_files = []
         self.output_folder = ""
