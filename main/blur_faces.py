@@ -25,10 +25,10 @@ def is_video_file(path: str):
     return path.endswith(SUPPORTED_VIDEO_FORMATS)
 
 
-def process_input(file_path: str, model: str, logger: dict):
+def process_input(file_path: str, output_file: str, model: str, method: str, logger: dict):
     frames = []
 
-    if is_image_file(args.input):
+    if is_image_file(file_path):
         print(f"Processing image {file_path}...")
         with timed_section("Image load time", logger):
             frames.append(read_image(file_path))
@@ -56,11 +56,11 @@ def process_input(file_path: str, model: str, logger: dict):
 
         with timed_section("Blurring time", logger):
             if boxes is not None:
-                if args.method == 'gaussian':
+                if method == 'gaussian':
                     frame = apply_rect_gaussian_blur(frame, boxes)
-                elif args.method == 'elliptical':
+                elif method == 'elliptical':
                     frame = apply_elliptical_gaussian_blur(frame, boxes, landmarks)
-                elif args.method == 'pixelation':
+                elif method == 'pixelation':
                     frame = apply_rect_pixelation(frame, boxes)
                 else:
                     raise ValueError(f"Unsupported method. Supported methods: gaussian, elliptical, pixelation.")
@@ -69,9 +69,9 @@ def process_input(file_path: str, model: str, logger: dict):
 
     with timed_section("Output time", logger):
         if len(output_frames) == 1:
-            save_image(output_frames[0], f"../output/{args.output}")
+            save_image(output_frames[0], output_file)
         else:
-            write_video(output_frames, f"../output/{args.output}", fps, size)
+            write_video(output_frames, output_file, fps, size)
     
     return logger
 
@@ -79,7 +79,7 @@ def main(args):
     logger = {}
 
     with timed_section("Total processing time", logger):
-        logger = process_input(args.input, args.model, logger)
+        logger = process_input(args.input, args.output, args.model, args.method, logger)
     
     print(f"Saved output to {args.output}")
 
