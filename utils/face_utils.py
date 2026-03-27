@@ -1,10 +1,23 @@
-from facenet_pytorch import MTCNN
-import torch
+import os
+
 import numpy as np
+import torch
+from facenet_pytorch import MTCNN
 from ultralytics import YOLO
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 mtcnn = MTCNN(keep_all=True, device=device)
+
+_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+_yolo_model = None
+
+
+def _get_yolo_model():
+    global _yolo_model
+    if _yolo_model is None:
+        _yolo_model = YOLO(os.path.join(_MODELS_DIR, "yolov8n-face.pt"))
+    return _yolo_model
+
 
 def detect_faces_mtcnn(image):
     """
@@ -25,7 +38,7 @@ def detect_faces_yolo(image):
     """
     Detect faces in an image using YOLO.
     """
-    model = YOLO("../models/yolov8n-face.pt")
+    model = _get_yolo_model()
     results = model(image, verbose=False)[0]
 
     boxes = []

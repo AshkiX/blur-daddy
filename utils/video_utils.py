@@ -1,5 +1,6 @@
 import cv2
 
+
 def extract_frames(video_path: str):
     """
     Extract frames from a video.
@@ -21,6 +22,7 @@ def get_video_metadata(video_path: str):
     fps = cap.get(cv2.CAP_PROP_FPS)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
     return fps, (width, height)
 
 def write_video(frames: list, output_path: str, fps: int, size: tuple):

@@ -54,7 +54,7 @@ def apply_elliptical_gaussian_blur(image, boxes, landmarks):
     for box, landmark in zip(boxes, landmarks):
         angle = get_face_angle(landmark) if landmark is not None else 0
         x1, y1, x2, y2 = get_padded_clamped_box(image.shape, box)
-        
+
         cx = (x1 + x2) // 2
         cy = (y1 + y2) // 2
         w = x2 - x1

@@ -1,5 +1,6 @@
 import cv2
 
+
 def read_image(path):
     """
     Read an image from a file.

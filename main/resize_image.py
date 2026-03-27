@@ -1,11 +1,12 @@
-import cv2
 import argparse
-from utils.image_utils import resize_image
+
+from utils.image_utils import read_image, resize_image, save_image
+
 
 def main(args):
-    image = cv2.imread(args.input)
+    image = read_image(args.input)
     resized_image = resize_image(image, width=args.width, height=args.height)
-    cv2.imwrite(args.output, resized_image)
+    save_image(resized_image, args.output)
     print(f"Saved resized image to {args.output}")
 
 if __name__ == "__main__":
@@ -16,4 +17,3 @@ if __name__ == "__main__":
     parser.add_argument("--height", type=int, help="Height to resize the image to.")
     args = parser.parse_args()
     main(args)
-    

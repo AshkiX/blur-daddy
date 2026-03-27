@@ -1,0 +1,39 @@
+[project]
+name = "blur-daddy"
+version = "0.3.0"
+description = "Fast, accurate face blurring for images and videos"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "facenet-pytorch>=2.5.3",
+    "opencv-python>=4.8.0",
+    "torch>=2.0.0",
+    "ultralytics>=8.0.0",
+    "tqdm>=4.60.0",
+    "psutil>=5.9.0",
+    "omegaconf>=2.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AshkiX/blur-daddy"
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
