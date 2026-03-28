@@ -34,20 +34,26 @@ uv sync
 ## Quick Start
 
 ```bash
-# Blur faces in an image
-blur-daddy --input photo.jpg --output blurred.jpg
+# Detect faces (preview what will be blurred)
+blur-daddy detect photo.jpg -o preview.jpg
+
+# Blur all faces in an image
+blur-daddy blur photo.jpg -o blurred.jpg
 
 # Blur faces in a video
-blur-daddy --input video.mp4 --output blurred.mp4
+blur-daddy blur video.mp4 -o blurred.mp4
 
 # Use pixelation instead of gaussian
-blur-daddy --input photo.jpg --output blurred.jpg --method pixelation
+blur-daddy blur photo.jpg -o blurred.jpg --method pixelation
 
 # Use elliptical blur (smooth, follows face angle)
-blur-daddy --input photo.jpg --output blurred.jpg --method elliptical
+blur-daddy blur photo.jpg -o blurred.jpg --method elliptical
 
 # Use MTCNN for more accurate detection
-blur-daddy --input photo.jpg --output blurred.jpg --model mtcnn
+blur-daddy blur photo.jpg -o blurred.jpg --model mtcnn
+
+# Keep specific faces unblurred (e.g. yourself)
+blur-daddy blur photo.jpg -o blurred.jpg --keep face-0
 ```
 
 ## Python API
@@ -85,13 +91,23 @@ result.save("blurred.jpg")
 ## CLI Reference
 
 ```
-blur-daddy --input INPUT --output OUTPUT [--method METHOD] [--model MODEL]
+blur-daddy detect INPUT [-o OUTPUT] [--model MODEL] [--json]
+blur-daddy blur INPUT -o OUTPUT [--method METHOD] [--model MODEL] [--keep ID ...]
 
-Options:
-  --input       Path to image or video file (required)
-  --output      Output file path (required)
+Subcommands:
+  detect        Detect faces and preview results
+  blur          Blur detected faces in an image or video
+
+Options (blur):
+  -o, --output  Output file path (required)
   --method      gaussian (default), pixelation, elliptical
   --model       yolov8n-face (default), mtcnn
+  --keep        Face IDs to protect from blurring (e.g. face-0 face-2)
+
+Options (detect):
+  -o, --output  Save annotated preview image
+  --model       yolov8n-face (default), mtcnn
+  --json        Print detections as JSON
 ```
 
 **Supported formats:**
@@ -106,7 +122,7 @@ docker build -t blur-daddy .
 
 # Run
 docker run --rm -v $(pwd):/data blur-daddy \
-  --input /data/photo.jpg --output /data/blurred.jpg
+  blur /data/photo.jpg -o /data/blurred.jpg
 ```
 
 ## Performance

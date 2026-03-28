@@ -14,14 +14,17 @@ The long-term vision is a dual-track product: open-source CLI/library + paid clo
 # Install dependencies (uv-managed, Python 3.12)
 uv sync
 
-# Blur an image (console script)
-blur-daddy --input sample_images/sample1.jpg --output test.jpg --method gaussian --model yolov8n-face
+# Detect faces (preview)
+blur-daddy detect sample_images/sample1.jpg -o preview.jpg --json
 
-# Blur a video
-blur-daddy --input sample_videos/sample1.mp4 --output test.mp4 --method gaussian --model yolov8n-face
+# Blur faces in an image
+blur-daddy blur sample_images/sample1.jpg -o test.jpg --method gaussian --model yolov8n-face
 
-# Or run as module
-python -m blur_daddy.cli --input sample_images/sample1.jpg --output test.jpg
+# Blur faces in a video
+blur-daddy blur sample_videos/sample1.mp4 -o test.mp4
+
+# Blur but keep specific faces unblurred
+blur-daddy blur photo.jpg -o out.jpg --keep face-0 face-2
 
 # Resize an image
 blur-daddy-resize --input path/to/image.jpg --output resized.jpg --width 800
@@ -29,18 +32,16 @@ blur-daddy-resize --input path/to/image.jpg --output resized.jpg --width 800
 # Run tests
 uv run pytest
 
-# Run tests with milestone report (generates reports/M1.html)
-uv run pytest --milestone-report M1
+# Run tests with milestone report (generates reports/M3.md)
+uv run pytest --milestone-report M3
 
 # Lint
 uv run ruff check .
 ```
 
-**CLI arguments for `blur-daddy`:**
-- `--input` (required): path to image or video
-- `--output` (required): output path
-- `--method`: `gaussian` (default), `elliptical`, `pixelation`
-- `--model`: `yolov8n-face` (default), `mtcnn`
+**CLI subcommands:**
+- `blur-daddy detect INPUT [-o OUTPUT] [--model MODEL] [--json]` — detect faces, preview results
+- `blur-daddy blur INPUT -o OUTPUT [--method METHOD] [--model MODEL] [--keep ID ...]` — blur faces, optionally keep some unblurred
 
 ## Architecture
 

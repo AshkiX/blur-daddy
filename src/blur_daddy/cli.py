@@ -1,9 +1,16 @@
 """CLI entry point for blur-daddy.
 
 This is a thin wrapper around BlurDaddy — all logic lives in the API.
+
+Usage:
+    blur-daddy detect photo.jpg -o preview.jpg
+    blur-daddy blur photo.jpg -o blurred.jpg --keep face-0
+    blur-daddy blur video.mp4 -o blurred.mp4
 """
 
 import argparse
+import json
+import sys
 import time
 
 from blur_daddy.api import BlurDaddy
@@ -22,46 +29,66 @@ def _is_video_file(path: str) -> bool:
     return path.lower().endswith(SUPPORTED_VIDEO_FORMATS)
 
 
-def _process_image(bd: BlurDaddy, input_path: str, output_path: str) -> None:
-    """Process a single image through the API."""
-    result = bd.blur(input_path)
-    result.save(output_path)
-    print(f"Detected {len(result.detections)} face(s)")
+# ---------------------------------------------------------------------------
+# detect subcommand
+# ---------------------------------------------------------------------------
+
+def _cmd_detect(args):
+    bd = BlurDaddy(model=args.model)
+    result = bd.detect(args.input)
+
+    # Print detections as structured output
+    for det in result.detections:
+        x1, y1, x2, y2 = det.box_int
+        print(f"  {det.id}  box=({x1},{y1},{x2},{y2})  conf={det.confidence:.2f}")
+
+    if not result.detections:
+        print("  No detections found.")
+
+    # Save annotated preview if output specified
+    if args.output:
+        result.save(args.output)
+        print(f"Saved preview to {args.output}")
+
+    # Write JSON to stdout if requested
+    if args.json:
+        data = [
+            {"id": d.id, "box": list(d.box), "confidence": round(d.confidence, 4)}
+            for d in result.detections
+        ]
+        print(json.dumps(data, indent=2))
 
 
-def _process_video(bd: BlurDaddy, input_path: str, output_path: str) -> None:
-    """Process a video frame-by-frame through the API."""
-    from tqdm import tqdm
+# ---------------------------------------------------------------------------
+# blur subcommand
+# ---------------------------------------------------------------------------
 
-    frames = extract_frames(input_path)
-    fps, size = get_video_metadata(input_path)
-
-    output_frames = []
-    for frame in tqdm(frames, desc="Processing frames"):
-        result = bd.blur(frame)
-        # Convert RGB result back to BGR for video writing
-        import cv2
-        output_frames.append(cv2.cvtColor(result.image, cv2.COLOR_RGB2BGR))
-
-    write_video(output_frames, output_path, fps, size)
-    print(f"Processed {len(frames)} frames")
-
-
-def main(args):
+def _cmd_blur(args):
     bd = BlurDaddy(model=args.model, method=args.method)
-
     t0 = time.perf_counter()
+
+    # Resolve --keep IDs to Detection objects
+    keep = None
+    if args.keep:
+        preview = bd.detect(args.input)
+        keep_ids = set(args.keep)
+        keep = [d for d in preview.detections if d.id in keep_ids]
+        unknown = keep_ids - {d.id for d in keep}
+        if unknown:
+            print(f"Warning: unknown IDs ignored: {unknown}", file=sys.stderr)
+            print("  Run 'blur-daddy detect' first to see available IDs.", file=sys.stderr)
 
     if _is_image_file(args.input):
         print(f"Processing image {args.input}...")
-        _process_image(bd, args.input, args.output)
+        result = bd.blur(args.input, keep=keep)
+        result.save(args.output)
+        print(f"Detected {len(result.detections)} face(s)")
     elif _is_video_file(args.input):
         print(f"Processing video {args.input}...")
-        _process_video(bd, args.input, args.output)
+        _process_video(bd, args.input, args.output, keep=keep)
     else:
         raise ValueError(
-            f"Unsupported file type. Supported image formats: {SUPPORTED_IMAGE_FORMATS}. "
-            f"Supported video formats: {SUPPORTED_VIDEO_FORMATS}."
+            f"Unsupported file type. Supported: {SUPPORTED_IMAGE_FORMATS + SUPPORTED_VIDEO_FORMATS}"
         )
 
     elapsed = time.perf_counter() - t0
@@ -69,24 +96,74 @@ def main(args):
     print(f"Total time: {elapsed:.2f}s | Memory: {get_memory_usage()} MB")
 
 
+def _process_video(bd: BlurDaddy, input_path: str, output_path: str, keep=None) -> None:
+    import cv2
+    from tqdm import tqdm
+
+    frames = extract_frames(input_path)
+    fps, size = get_video_metadata(input_path)
+
+    output_frames = []
+    for frame in tqdm(frames, desc="Processing frames"):
+        result = bd.blur(frame, keep=keep)
+        output_frames.append(cv2.cvtColor(result.image, cv2.COLOR_RGB2BGR))
+
+    write_video(output_frames, output_path, fps, size)
+    print(f"Processed {len(frames)} frames")
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+
 def _build_parser():
-    parser = argparse.ArgumentParser(description="Blur faces in an image or video.")
-    parser.add_argument("--input", type=str, required=True, help="Path to the input file.")
-    parser.add_argument("--output", type=str, required=True, help="Path to save the output file.")
-    parser.add_argument(
-        "--method", type=str, default="gaussian",
+    parser = argparse.ArgumentParser(
+        prog="blur-daddy",
+        description="Fast, accurate face blurring for images and videos.",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    # --- detect ---
+    p_detect = sub.add_parser("detect", help="Detect faces and preview results.")
+    p_detect.add_argument("input", help="Path to input image.")
+    p_detect.add_argument("-o", "--output", help="Save annotated preview image.")
+    p_detect.add_argument(
+        "--model", default="yolov8n-face",
+        choices=["yolov8n-face", "mtcnn"], help="Detection model.",
+    )
+    p_detect.add_argument("--json", action="store_true", help="Print detections as JSON.")
+
+    # --- blur ---
+    p_blur = sub.add_parser("blur", help="Blur detected faces in an image or video.")
+    p_blur.add_argument("input", help="Path to input image or video.")
+    p_blur.add_argument("-o", "--output", required=True, help="Output file path.")
+    p_blur.add_argument(
+        "--method", default="gaussian",
         choices=["gaussian", "elliptical", "pixelation"], help="Blurring method.",
     )
-    parser.add_argument(
-        "--model", type=str, default="yolov8n-face",
-        choices=["yolov8n-face", "mtcnn"], help="Model to use for face detection.",
+    p_blur.add_argument(
+        "--model", default="yolov8n-face",
+        choices=["yolov8n-face", "mtcnn"], help="Detection model.",
     )
+    p_blur.add_argument(
+        "--keep", nargs="+", metavar="ID",
+        help="Detection IDs to protect from blurring (e.g. face-0 face-2).",
+    )
+
     return parser
 
 
 def main_cli():
-    args = _build_parser().parse_args()
-    main(args)
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    if args.command == "detect":
+        _cmd_detect(args)
+    elif args.command == "blur":
+        _cmd_blur(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
