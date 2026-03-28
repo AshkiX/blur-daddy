@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+output
+reports
+sample_images
+sample_videos
+tests
+local-docs
+.pytest_cache
+.ruff_cache

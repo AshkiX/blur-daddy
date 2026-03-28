@@ -46,3 +46,5 @@ select = ["E", "F", "I", "W"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = ["docker: requires Docker daemon"]
+addopts = "-m 'not docker'"

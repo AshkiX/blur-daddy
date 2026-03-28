@@ -1,58 +1,143 @@
 # Blur Daddy
 
-Blur Daddy is an open-source tool designed to enable precise face-blurring in photos and videos. This project aims to provide a comprehensive solution for privacy protection in media by offering various blurring techniques and advanced features.
+Fast, accurate face blurring for images and videos. Powered by YOLOv8 and MTCNN.
 
-## Features (so far)
+![Blur method comparison](docs/comparison.png)
 
-- **Face Blurring in Static Images**: Our initial release supports blurring faces in static images using Gaussian blur and pixelation techniques.
+## Features
 
+- **Two detection models**: YOLOv8n-face (fast, default) and MTCNN (accurate, with landmarks)
+- **Three blur methods**: Gaussian, pixelation, and elliptical (smooth, natural-looking)
+- **Images and video**: Process single files or video streams
+- **GPU optional**: Falls back to CPU automatically
 
-## Milestones
-
-1. ✅ **Milestone 1: MVP - Blur Faces in Static Images**
-   - Implemented face detection and blurring in static images.
-   - Supports Gaussian blur and pixelation methods.
-
-2. ✅ **Milestone 2: Video Blurring Support (Frame-by-Frame)**
-   - Extend functionality to support video files, processing each frame individually.
-
-3. ⬜ **Milestone 3: Face Tracking & ID Assignment for Videos**
-   - Implement face tracking across video frames with ID assignment for consistent blurring.
-
-4. TBD
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.x
-- OpenCV
-- Other dependencies as listed in `requirements.txt`
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/ashkix/blur-daddy.git
-   cd blur-daddy
-   ```
-
-2. Install the required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-### Usage
-
-To blur faces in an image, run the following command:
+## Install
 
 ```bash
-python main/blur_faces.py --input path/to/your/image.jpg --output path/to/save/blurred_image.jpg --method gaussian
+pip install blur-daddy
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv pip install blur-daddy
+```
+
+### From source
+
+```bash
+git clone https://github.com/AshkiX/blur-daddy.git
+cd blur-daddy
+uv sync
+```
+
+## Quick Start
+
+```bash
+# Blur faces in an image
+blur-daddy --input photo.jpg --output blurred.jpg
+
+# Blur faces in a video
+blur-daddy --input video.mp4 --output blurred.mp4
+
+# Use pixelation instead of gaussian
+blur-daddy --input photo.jpg --output blurred.jpg --method pixelation
+
+# Use elliptical blur (smooth, follows face angle)
+blur-daddy --input photo.jpg --output blurred.jpg --method elliptical
+
+# Use MTCNN for more accurate detection
+blur-daddy --input photo.jpg --output blurred.jpg --model mtcnn
+```
+
+## Python API
+
+```python
+from blur_daddy.detection import detect_faces_yolo
+from blur_daddy.blur import apply_rect_gaussian_blur
+from blur_daddy.image import read_image, save_image
+import cv2
+
+# Load and detect
+image = read_image("photo.jpg")
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+boxes, confs, _ = detect_faces_yolo(image_rgb)
+
+# Blur and save
+if boxes:
+    result = apply_rect_gaussian_blur(image, boxes)
+    save_image(result, "blurred.jpg")
+```
+
+## Blur Methods
+
+| Method | Description | Best for |
+|--------|-------------|----------|
+| `gaussian` | Rectangular Gaussian blur | Fast, general purpose |
+| `pixelation` | Mosaic/pixel block effect | Classic anonymization look |
+| `elliptical` | Smooth elliptical blur with feathered edges | Natural-looking, follows face angle via landmarks |
+
+## CLI Reference
+
+```
+blur-daddy --input INPUT --output OUTPUT [--method METHOD] [--model MODEL]
+
+Options:
+  --input       Path to image or video file (required)
+  --output      Output file path (required)
+  --method      gaussian (default), pixelation, elliptical
+  --model       yolov8n-face (default), mtcnn
+```
+
+**Supported formats:**
+- Images: PNG, JPG, JPEG, BMP, WebP, TIFF
+- Video: MP4, AVI, MOV, MKV, FLV, WMV, WebM
+
+## Docker
+
+```bash
+# Build
+docker build -t blur-daddy .
+
+# Run
+docker run --rm -v $(pwd):/data blur-daddy \
+  --input /data/photo.jpg --output /data/blurred.jpg
+```
+
+## Performance
+
+Benchmarks on sample image (CPU):
+
+| Operation | Time |
+|-----------|------|
+| YOLO detection | ~0.3s |
+| MTCNN detection | ~0.5s |
+| Gaussian blur | <0.01s |
+| Pixelation | <0.01s |
+| Elliptical blur | ~0.04s |
+
+GPU acceleration available via CUDA — set up PyTorch with CUDA support for faster detection.
+
+## Development
+
+```bash
+git clone https://github.com/AshkiX/blur-daddy.git
+cd blur-daddy
+uv sync
+
+# Run tests
+uv run pytest
+
+# Run tests with milestone report
+uv run pytest --milestone-report M2
+
+# Lint
+uv run ruff check .
 ```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 
 ## Acknowledgements
 
