@@ -1,10 +1,11 @@
-"""Pytest plugin that generates visual milestone reports as Markdown.
+"""Pytest plugin that generates visual milestone reports as HTML.
 
 Usage:
     uv run pytest --milestone-report M0
-    # produces reports/M0.md + reports/M0/*.png
+    # produces reports/M0.html (self-contained)
 """
 
+import base64
 import json
 import time
 from collections import defaultdict
@@ -57,8 +58,6 @@ def pytest_sessionfinish(session, exitstatus):
     results = session.config._ms_results
 
     REPORTS_DIR.mkdir(exist_ok=True)
-    images_dir = REPORTS_DIR / name
-    images_dir.mkdir(exist_ok=True)
 
     # --- Aggregate test results ---
     modules = defaultdict(lambda: {"passed": 0, "failed": 0, "skipped": 0, "tests": []})
@@ -82,7 +81,7 @@ def pytest_sessionfinish(session, exitstatus):
     perf = _run_benchmarks()
 
     # --- Visual samples ---
-    sample_files = _generate_visual_samples(images_dir)
+    sample_images = _generate_visual_samples()
 
     # --- Build milestone data ---
     milestone_data = {
@@ -102,10 +101,10 @@ def pytest_sessionfinish(session, exitstatus):
     history.sort(key=lambda h: h["name"])
     _save_history(history)
 
-    # --- Render Markdown ---
-    md = _render_markdown(name, milestone_data, modules, perf, sample_files, history)
-    report_path = REPORTS_DIR / f"{name}.md"
-    report_path.write_text(md)
+    # --- Render HTML ---
+    html = _render_html(name, milestone_data, modules, perf, sample_images, history)
+    report_path = REPORTS_DIR / f"{name}.html"
+    report_path.write_text(html)
 
     print(f"\n{'='*60}")
     print(f"  Milestone report: {report_path}")
@@ -160,11 +159,14 @@ def _run_benchmarks():
 
 
 # ---------------------------------------------------------------------------
-# Visual samples — saves PNGs to images_dir
+# Visual samples — returns base64-encoded PNGs
 # ---------------------------------------------------------------------------
 
-def _generate_visual_samples(images_dir):
-    """Generate sample images and save as PNGs. Returns list of (label, filename)."""
+def _generate_visual_samples():
+    """Generate sample images and return as base64 data URIs.
+
+    Returns list of (label, base64_data_uri).
+    """
     samples = []
     try:
         from blur_daddy import BlurDaddy
@@ -180,16 +182,16 @@ def _generate_visual_samples(images_dir):
                 return cv2.resize(img, None, fx=scale, fy=scale)
             return img
 
-        def _save_rgb(rgb_img, filename):
-            bgr = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(str(images_dir / filename), _resize(bgr))
+        def _to_b64(bgr_img):
+            resized = _resize(bgr_img)
+            _, buf = cv2.imencode(".png", resized)
+            return "data:image/png;base64," + base64.b64encode(buf).decode()
 
-        def _save_bgr(bgr_img, filename):
-            cv2.imwrite(str(images_dir / filename), _resize(bgr_img))
+        def _rgb_to_b64(rgb_img):
+            return _to_b64(cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
 
         # 1. Original
-        _save_bgr(img_bgr, "original.png")
-        samples.append(("Original", "original.png"))
+        samples.append(("Original", _to_b64(img_bgr)))
 
         # 2. Detection preview
         bd = BlurDaddy()
@@ -202,22 +204,18 @@ def _generate_visual_samples(images_dir):
             x1, y1, x2, y2 = face.box_int
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(annotated, face.id, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        _save_rgb(annotated, "detect.png")
-        samples.append(("detect()", "detect.png"))
+        samples.append(("detect()", _rgb_to_b64(annotated)))
 
         # 3. Three blur methods
         for method in ("gaussian", "pixelation", "elliptical"):
             bd_m = BlurDaddy(method=method)
             result = bd_m.blur(str(SAMPLE_IMAGE))
-            filename = f"blur_{method}.png"
-            _save_rgb(result.image, filename)
-            samples.append((f"blur(method='{method}')", filename))
+            samples.append((f"blur(method='{method}')", _rgb_to_b64(result.image)))
 
         # 4. keep= demo
         if len(preview.faces) >= 2:
             result_keep = bd.blur(str(SAMPLE_IMAGE), keep=[preview.faces[0]])
-            _save_rgb(result_keep.image, "blur_keep.png")
-            samples.append(("blur(keep=[face-0])", "blur_keep.png"))
+            samples.append(("blur(keep=[face-0])", _rgb_to_b64(result_keep.image)))
 
     except Exception:
         pass
@@ -240,77 +238,127 @@ def _save_history(history):
 
 
 # ---------------------------------------------------------------------------
-# Markdown rendering
+# HTML rendering
 # ---------------------------------------------------------------------------
 
-def _render_markdown(name, data, modules, perf, sample_files, history):
+def _render_html(name, data, modules, perf, sample_images, history):
     passed, failed, skipped, total = data["passed"], data["failed"], data["skipped"], data["total"]
     status = "ALL PASSING" if failed == 0 else f"{failed} FAILING"
+    status_class = "pass" if failed == 0 else "fail"
     timestamp = datetime.fromisoformat(data["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
 
-    lines = [
-        f"# {name} — Milestone Report",
-        "",
-        f"**{timestamp}** | **{status}** | {total} total | {passed} passed | {failed} failed | {skipped} skipped",
-        "",
-    ]
-
-    # --- Tests by module ---
-    lines.append("## Tests by Module")
-    lines.append("")
-    lines.append("| Module | Pass | Fail | Skip | Status |")
-    lines.append("|--------|------|------|------|--------|")
+    # --- Tests by module rows ---
+    module_rows = ""
     for mod_name, mod in sorted(modules.items()):
         p, f, s = mod["passed"], mod["failed"], mod["skipped"]
-        icon = "pass" if f == 0 else "FAIL"
-        lines.append(f"| {mod_name} | {p} | {f} | {s} | {icon} |")
-    lines.append("")
+        row_class = "pass" if f == 0 else "fail"
+        icon = "PASS" if f == 0 else "FAIL"
+        module_rows += (
+            f"<tr class='{row_class}'><td>{mod_name}</td>"
+            f"<td>{p}</td><td>{f}</td><td>{s}</td><td>{icon}</td></tr>\n"
+        )
 
     # --- Failed tests ---
+    failed_section = ""
     if failed > 0:
-        failed_tests = []
-        for r in data.get("_results", []):
-            if not r.get("passed") and not r.get("skipped"):
-                failed_tests.append(r)
+        failed_tests = [r for r in data.get("_results", []) if not r.get("passed") and not r.get("skipped")]
         if failed_tests:
-            lines.append("## Failed Tests")
-            lines.append("")
-            for t in failed_tests:
-                lines.append(f"- `{t['nodeid']}`")
-            lines.append("")
+            items = "".join(f"<li><code>{t['nodeid']}</code></li>" for t in failed_tests)
+            failed_section = f"<h2>Failed Tests</h2><ul>{items}</ul>"
 
-    # --- Performance ---
+    # --- Performance rows ---
+    perf_section = ""
     if perf and "error" not in perf:
-        lines.append("## Performance")
-        lines.append("")
-        lines.append("| Operation | Time |")
-        lines.append("|-----------|------|")
+        perf_rows = ""
         for op, secs in perf.items():
-            lines.append(f"| `{op}` | {secs:.3f}s |")
-        lines.append("")
+            perf_rows += f"<tr><td><code>{op}</code></td><td>{secs:.3f}s</td></tr>\n"
+        perf_section = f"""<h2>Performance</h2>
+<table><thead><tr><th>Operation</th><th>Time</th></tr></thead>
+<tbody>{perf_rows}</tbody></table>"""
 
     # --- Visual samples ---
-    if sample_files:
-        lines.append("## Visual Samples")
-        lines.append("")
-        # Row of images as a table
-        headers = " | ".join(label for label, _ in sample_files)
-        separator = " | ".join("---" for _ in sample_files)
-        images = " | ".join(f"![{label}]({name}/{filename})" for label, filename in sample_files)
-        lines.append(f"| {headers} |")
-        lines.append(f"| {separator} |")
-        lines.append(f"| {images} |")
-        lines.append("")
+    samples_section = ""
+    if sample_images:
+        cards = ""
+        for label, data_uri in sample_images:
+            cards += f"""<div class="sample-card">
+<img src="{data_uri}" alt="{label}">
+<div class="sample-label">{label}</div>
+</div>\n"""
+        samples_section = f'<h2>Visual Samples</h2><div class="samples-grid">{cards}</div>'
 
-    # --- Milestone trend ---
-    lines.append("## Milestone Trend")
-    lines.append("")
-    lines.append("| Milestone | Total | Passed | Failed |")
-    lines.append("|-----------|-------|--------|--------|")
+    # --- Milestone trend rows ---
+    trend_rows = ""
     for h in history:
-        marker = " **<- current**" if h["name"] == name else ""
-        lines.append(f"| {h['name']}{marker} | {h['total']} | {h['passed']} | {h['failed']} |")
-    lines.append("")
+        marker = " (current)" if h["name"] == name else ""
+        row_class = "current" if h["name"] == name else ""
+        trend_rows += (
+            f"<tr class='{row_class}'><td>{h['name']}{marker}</td>"
+            f"<td>{h['total']}</td><td>{h['passed']}</td><td>{h['failed']}</td></tr>\n"
+        )
 
-    lines.append(f"---\n*Generated by `pytest --milestone-report {name}`*")
-    return "\n".join(lines)
+    css = (
+        "body { font-family: -apple-system, BlinkMacSystemFont, "
+        "'Segoe UI', Roboto, sans-serif; max-width: 960px; "
+        "margin: 0 auto; padding: 2rem; color: #1a1a1a; background: #fafafa; }\n"
+        "h1 { margin-bottom: 0.25rem; }\n"
+        ".summary { color: #555; margin-bottom: 2rem; font-size: 0.95rem; }\n"
+        ".summary .status { font-weight: bold; }\n"
+        ".summary .status.pass { color: #16a34a; }\n"
+        ".summary .status.fail { color: #dc2626; }\n"
+        "table { border-collapse: collapse; width: 100%; margin-bottom: 2rem; }\n"
+        "th, td { text-align: left; padding: 0.5rem 0.75rem; "
+        "border-bottom: 1px solid #e5e5e5; }\n"
+        "th { background: #f5f5f5; font-weight: 600; }\n"
+        "tr.pass td:last-child { color: #16a34a; font-weight: 600; }\n"
+        "tr.fail td:last-child { color: #dc2626; font-weight: 600; }\n"
+        "tr.current { background: #eff6ff; }\n"
+        "code { background: #f0f0f0; padding: 0.15em 0.35em; "
+        "border-radius: 3px; font-size: 0.9em; }\n"
+        ".samples-grid { display: flex; flex-wrap: wrap; gap: 1rem; "
+        "margin-bottom: 2rem; }\n"
+        ".sample-card { flex: 1 1 180px; max-width: 280px; text-align: center; }\n"
+        ".sample-card img { width: 100%; border: 1px solid #ddd; "
+        "border-radius: 4px; }\n"
+        ".sample-label { font-size: 0.8rem; color: #555; margin-top: 0.25rem; }\n"
+        ".footer { color: #999; font-size: 0.8rem; "
+        "border-top: 1px solid #e5e5e5; padding-top: 1rem; margin-top: 2rem; }"
+    )
+
+    summary_line = (
+        f"{timestamp} | <span class=\"status {status_class}\">{status}</span>"
+        f" | {total} total | {passed} passed"
+        f" | {failed} failed | {skipped} skipped"
+    )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{name} — Milestone Report</title>
+<style>{css}</style>
+</head>
+<body>
+<h1>{name} — Milestone Report</h1>
+<p class="summary">{summary_line}</p>
+
+<h2>Tests by Module</h2>
+<table>
+<thead><tr><th>Module</th><th>Pass</th><th>Fail</th><th>Skip</th><th>Status</th></tr></thead>
+<tbody>{module_rows}</tbody>
+</table>
+
+{failed_section}
+{perf_section}
+{samples_section}
+
+<h2>Milestone Trend</h2>
+<table>
+<thead><tr><th>Milestone</th><th>Total</th><th>Passed</th><th>Failed</th></tr></thead>
+<tbody>{trend_rows}</tbody>
+</table>
+
+<div class="footer">Generated by <code>pytest --milestone-report {name}</code></div>
+</body>
+</html>"""
