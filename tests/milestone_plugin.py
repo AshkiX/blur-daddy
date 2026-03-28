@@ -120,39 +120,38 @@ def pytest_sessionfinish(session, exitstatus):
 def _run_benchmarks():
     perf = {}
     try:
-        from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-        from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
+        from blur_daddy import BlurDaddy
 
         if not SAMPLE_IMAGE.exists():
             return perf
 
-        img_bgr = cv2.imread(str(SAMPLE_IMAGE))
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        path = str(SAMPLE_IMAGE)
 
-        # YOLO detection
+        # YOLO detect
+        bd_yolo = BlurDaddy(model="yolov8n-face")
         t0 = time.perf_counter()
-        boxes_y, confs_y, _ = detect_faces_yolo(img_rgb)
-        perf["YOLO detect"] = round(time.perf_counter() - t0, 3)
+        bd_yolo.detect(path)
+        perf["detect(model='yolov8n-face')"] = round(time.perf_counter() - t0, 3)
 
-        # MTCNN detection
+        # MTCNN detect
+        bd_mtcnn = BlurDaddy(model="mtcnn")
         t0 = time.perf_counter()
-        boxes_m, _, landmarks_m = detect_faces_mtcnn(img_rgb)
-        perf["MTCNN detect"] = round(time.perf_counter() - t0, 3)
+        bd_mtcnn.detect(path)
+        perf["detect(model='mtcnn')"] = round(time.perf_counter() - t0, 3)
 
-        # Use YOLO boxes for blur benchmarks (fall back to MTCNN)
-        boxes = boxes_y if boxes_y else (boxes_m.tolist() if boxes_m is not None else [[50, 50, 200, 200]])
+        # Blur methods
+        for method in ("gaussian", "pixelation", "elliptical"):
+            bd = BlurDaddy(method=method)
+            t0 = time.perf_counter()
+            bd.blur(path)
+            perf[f"blur(method='{method}')"] = round(time.perf_counter() - t0, 3)
 
-        t0 = time.perf_counter()
-        apply_rect_gaussian_blur(img_bgr.copy(), boxes)
-        perf["Gaussian blur"] = round(time.perf_counter() - t0, 3)
-
-        t0 = time.perf_counter()
-        apply_rect_pixelation(img_bgr.copy(), boxes)
-        perf["Pixelation"] = round(time.perf_counter() - t0, 3)
-
-        t0 = time.perf_counter()
-        apply_elliptical_gaussian_blur(img_bgr.copy(), boxes, landmarks_m)
-        perf["Elliptical blur"] = round(time.perf_counter() - t0, 3)
+        # keep= (detect + blur with protection)
+        preview = bd_yolo.detect(path)
+        if len(preview.faces) >= 2:
+            t0 = time.perf_counter()
+            bd_yolo.blur(path, keep=[preview.faces[0]])
+            perf["blur(keep=[face-0])"] = round(time.perf_counter() - t0, 3)
 
     except Exception as exc:
         perf["error"] = str(exc)
@@ -165,52 +164,54 @@ def _run_benchmarks():
 # ---------------------------------------------------------------------------
 
 def _generate_visual_samples():
-    """Run the blur pipeline on the sample image and return base64-encoded PNGs."""
+    """Run the blur pipeline on the sample image using the high-level API.
+
+    Generates diverse samples that showcase the latest API features.
+    """
     samples = {}
     try:
-        from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-        from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
+        from blur_daddy import BlurDaddy
 
         if not SAMPLE_IMAGE.exists():
             return samples
 
         img_bgr = cv2.imread(str(SAMPLE_IMAGE))
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-
-        # Detect faces
-        boxes_y, _, _ = detect_faces_yolo(img_rgb)
-        boxes_m, _, landmarks_m = detect_faces_mtcnn(img_rgb)
-        boxes = boxes_y if boxes_y else (boxes_m.tolist() if boxes_m is not None else None)
-
-        if boxes is None:
-            return samples
-
-        # Resize for report (max 600px wide)
         scale = min(1.0, 600.0 / img_bgr.shape[1])
+
         def _resize(img):
             if scale < 1.0:
                 return cv2.resize(img, None, fx=scale, fy=scale)
             return img
 
+        def _rgb_to_bgr_b64(rgb_img):
+            return _img_to_b64(_resize(cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)))
+
+        # 1. Original
         samples["Original"] = _img_to_b64(_resize(img_bgr))
 
-        # Draw detection boxes on original
-        annotated = img_bgr.copy()
-        for box in boxes:
-            x1, y1, x2, y2 = [int(c) for c in box]
+        # 2. Detection preview (annotated with numbered boxes)
+        bd = BlurDaddy()
+        preview = bd.detect(str(SAMPLE_IMAGE))
+        if not preview.faces:
+            return samples
+
+        annotated = preview.image.copy()
+        for face in preview.faces:
+            x1, y1, x2, y2 = face.box_int
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        samples["Detected faces"] = _img_to_b64(_resize(annotated))
+            cv2.putText(annotated, face.id, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        samples["detect()"] = _rgb_to_bgr_b64(annotated)
 
-        # Gaussian
-        samples["Gaussian blur"] = _img_to_b64(_resize(apply_rect_gaussian_blur(img_bgr.copy(), boxes)))
+        # 3. Three blur methods
+        for method in ("gaussian", "pixelation", "elliptical"):
+            bd_m = BlurDaddy(method=method)
+            result = bd_m.blur(str(SAMPLE_IMAGE))
+            samples[f"blur(method='{method}')"] = _rgb_to_bgr_b64(result.image)
 
-        # Pixelation
-        samples["Pixelation"] = _img_to_b64(_resize(apply_rect_pixelation(img_bgr.copy(), boxes)))
-
-        # Elliptical
-        samples["Elliptical blur"] = _img_to_b64(
-            _resize(apply_elliptical_gaussian_blur(img_bgr.copy(), boxes, landmarks_m))
-        )
+        # 4. keep= demo: blur all except face-0
+        if len(preview.faces) >= 2:
+            result_keep = bd.blur(str(SAMPLE_IMAGE), keep=[preview.faces[0]])
+            samples["blur(keep=[face-0])"] = _rgb_to_bgr_b64(result_keep.image)
 
     except Exception:
         pass
