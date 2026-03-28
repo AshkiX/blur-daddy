@@ -3,11 +3,11 @@ import argparse
 import cv2
 from tqdm import tqdm
 
-from utils.benchmark_utils import get_memory_usage, timed_section
-from utils.blur_utils import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-from utils.face_utils import detect_faces_mtcnn, detect_faces_yolo
-from utils.image_utils import read_image, save_image
-from utils.video_utils import extract_frames, get_video_metadata, write_video
+from blur_daddy.benchmark import get_memory_usage, timed_section
+from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
+from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
+from blur_daddy.image import read_image, save_image
+from blur_daddy.video import extract_frames, get_video_metadata, write_video
 
 DEBUG = False
 SUPPORTED_IMAGE_FORMATS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp', '.tiff')
@@ -93,7 +93,7 @@ def main(args):
     for metric, time_value in logger.items():
         print(f"{metric}: {time_value:.2f} seconds")
 
-if __name__ == "__main__":
+def _build_parser():
     parser = argparse.ArgumentParser(description="Blur faces in an image or video.")
     parser.add_argument("--input", type=str, required=True, help="Path to the input file.")
     parser.add_argument("--output", type=str, required=True, help="Path to save the output file.")
@@ -105,5 +105,13 @@ if __name__ == "__main__":
         "--model", type=str, default="yolov8n-face",
         choices=["yolov8n-face", "mtcnn"], help="Model to use for face detection.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main_cli():
+    args = _build_parser().parse_args()
     main(args)
+
+
+if __name__ == "__main__":
+    main_cli()

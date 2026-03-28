@@ -13,5 +13,20 @@
       "Pixelation": 0.0,
       "Elliptical blur": 0.026
     }
+  },
+  {
+    "name": "M1",
+    "timestamp": "2026-03-28T13:12:22.624768+00:00",
+    "total": 58,
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0,
+    "perf": {
+      "YOLO detect": 0.332,
+      "MTCNN detect": 0.841,
+      "Gaussian blur": 0.007,
+      "Pixelation": 0.0,
+      "Elliptical blur": 0.041
+    }
   }
 ]

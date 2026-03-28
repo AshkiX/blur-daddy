@@ -7,18 +7,18 @@ import sys
 import cv2
 
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), "..")
-BLUR_FACES = os.path.join(PROJECT_ROOT, "main", "blur_faces.py")
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 PYTHON = sys.executable
 
 YOLO_ARGS = ["--model", "yolov8n-face"]
 
 
 def _run_cli(args, timeout=120):
-    """Run blur_faces.py with PYTHONPATH set to project root."""
+    """Run blur_daddy.cli as a module with src on PYTHONPATH."""
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.path.abspath(PROJECT_ROOT)
+    env["PYTHONPATH"] = os.path.abspath(SRC_DIR)
     return subprocess.run(
-        [PYTHON, BLUR_FACES] + args,
+        [PYTHON, "-m", "blur_daddy.cli"] + args,
         capture_output=True, text=True, cwd=PROJECT_ROOT, env=env, timeout=timeout,
     )
 

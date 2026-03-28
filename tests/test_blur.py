@@ -3,14 +3,14 @@
 import numpy as np
 import pytest
 
-from utils.blur_utils import (
+from blur_daddy.blur import (
     apply_elliptical_gaussian_blur,
     apply_rect_gaussian_blur,
     apply_rect_pixelation,
     blend_images,
     get_padded_clamped_box,
 )
-from utils.face_utils import get_face_angle
+from blur_daddy.detection import get_face_angle
 
 RNG = np.random.default_rng(42)
 

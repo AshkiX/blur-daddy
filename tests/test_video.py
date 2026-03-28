@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 
-from utils.video_utils import extract_frames, get_video_metadata, write_video
+from blur_daddy.video import extract_frames, get_video_metadata, write_video
 
 
 class TestExtractFrames:

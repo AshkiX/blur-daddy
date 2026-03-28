@@ -17,7 +17,7 @@ pytest_configure = _plugin.pytest_configure
 pytest_runtest_makereport = _plugin.pytest_runtest_makereport
 pytest_sessionfinish = _plugin.pytest_sessionfinish
 
-from utils.video_utils import write_video  # noqa: E402
+from blur_daddy.video import write_video  # noqa: E402
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 SAMPLE_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "sample_images")

@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 
-from utils.image_utils import read_image, resize_image, save_image
+from blur_daddy.image import read_image, resize_image, save_image
 
 
 class TestReadImage:

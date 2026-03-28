@@ -120,8 +120,8 @@ def pytest_sessionfinish(session, exitstatus):
 def _run_benchmarks():
     perf = {}
     try:
-        from utils.blur_utils import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-        from utils.face_utils import detect_faces_mtcnn, detect_faces_yolo
+        from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
+        from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
 
         if not SAMPLE_IMAGE.exists():
             return perf
@@ -168,8 +168,8 @@ def _generate_visual_samples():
     """Run the blur pipeline on the sample image and return base64-encoded PNGs."""
     samples = {}
     try:
-        from utils.blur_utils import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-        from utils.face_utils import detect_faces_mtcnn, detect_faces_yolo
+        from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
+        from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
 
         if not SAMPLE_IMAGE.exists():
             return samples

@@ -18,8 +18,16 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/AshkiX/blur-daddy"
 
-[tool.uv]
-package = false
+[project.scripts]
+blur-daddy = "blur_daddy.cli:main_cli"
+blur-daddy-resize = "blur_daddy.resize:main_cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/blur_daddy"]
 
 [dependency-groups]
 dev = [
@@ -30,10 +38,11 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py39"
+src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]

@@ -2,7 +2,7 @@
 
 import cv2
 
-from utils.face_utils import detect_faces_mtcnn, detect_faces_yolo
+from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
 
 
 class TestYOLODetection:

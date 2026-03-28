@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from utils.face_utils import get_face_angle
+from blur_daddy.detection import get_face_angle
 
 PADDING = 15
 

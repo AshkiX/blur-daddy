@@ -8,7 +8,20 @@ from ultralytics import YOLO
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 mtcnn = MTCNN(keep_all=True, device=device)
 
-_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models")
+def _find_models_dir():
+    """Find models/ dir by walking up from this file until we find it."""
+    d = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(5):
+        candidate = os.path.join(d, "models")
+        if os.path.isdir(candidate):
+            return candidate
+        d = os.path.dirname(d)
+    if os.path.isdir("models"):
+        return os.path.abspath("models")
+    raise FileNotFoundError("Cannot locate models/ directory")
+
+
+_MODELS_DIR = os.environ.get("BLUR_DADDY_MODELS_DIR") or _find_models_dir()
 _yolo_model = None
 
 

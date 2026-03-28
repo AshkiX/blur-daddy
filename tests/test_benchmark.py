@@ -2,7 +2,7 @@
 
 import time
 
-from utils.benchmark_utils import get_memory_usage, timed_section
+from blur_daddy.benchmark import get_memory_usage, timed_section
 
 
 class TestTimedSection:
