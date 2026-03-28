@@ -1,10 +1,23 @@
+import importlib.util
 import os
 
 import cv2
 import numpy as np
 import pytest
 
-from utils.video_utils import write_video
+# Load milestone report plugin from adjacent file
+_spec = importlib.util.spec_from_file_location(
+    "milestone_plugin", os.path.join(os.path.dirname(__file__), "milestone_plugin.py")
+)
+_plugin = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_plugin)
+
+pytest_addoption = _plugin.pytest_addoption
+pytest_configure = _plugin.pytest_configure
+pytest_runtest_makereport = _plugin.pytest_runtest_makereport
+pytest_sessionfinish = _plugin.pytest_sessionfinish
+
+from utils.video_utils import write_video  # noqa: E402
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 SAMPLE_IMAGES_DIR = os.path.join(os.path.dirname(__file__), "..", "sample_images")

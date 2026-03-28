@@ -11,8 +11,8 @@ The long-term vision is a dual-track product: open-source CLI/library + paid clo
 ## Commands
 
 ```bash
-# Install dependencies (Python 3.x, venv at ./venv)
-pip install -r requirements.txt
+# Install dependencies (uv-managed, Python 3.12)
+uv sync
 
 # Blur an image (run from project root)
 python main/blur_faces.py --input sample_images/sample1.jpg --output test.jpg --method gaussian --model yolov8n-face
@@ -22,6 +22,15 @@ python main/blur_faces.py --input sample_videos/sample1.mp4 --output test.mp4 --
 
 # Resize an image
 python main/resize_image.py --input path/to/image.jpg --output resized.jpg --width 800
+
+# Run tests
+uv run pytest
+
+# Run tests with milestone report (generates reports/M0.html)
+uv run pytest --milestone-report M0
+
+# Lint
+uv run ruff check .
 ```
 
 **CLI arguments for `blur_faces.py`:**
@@ -60,9 +69,8 @@ main/blur_faces.py          CLI entry point, orchestrates the pipeline
 
 - No face tracking across video frames (faces processed independently per frame)
 - No audio preservation in video output
-- No tests, CI/CD, or pip packaging
+- No CI/CD or pip packaging
 - No batch processing or selective blurring
-- Global `args` variable leaks into `process_input()` function (uses `args.input`, `args.method` directly instead of parameters)
 
 ## Dependencies
 
