@@ -1,97 +1,73 @@
+"""CLI entry point for blur-daddy.
+
+This is a thin wrapper around BlurDaddy — all logic lives in the API.
+"""
+
 import argparse
+import time
 
-import cv2
-from tqdm import tqdm
-
-from blur_daddy.benchmark import get_memory_usage, timed_section
-from blur_daddy.blur import apply_elliptical_gaussian_blur, apply_rect_gaussian_blur, apply_rect_pixelation
-from blur_daddy.detection import detect_faces_mtcnn, detect_faces_yolo
-from blur_daddy.image import read_image, save_image
+from blur_daddy.api import BlurDaddy
+from blur_daddy.benchmark import get_memory_usage
 from blur_daddy.video import extract_frames, get_video_metadata, write_video
 
-DEBUG = False
 SUPPORTED_IMAGE_FORMATS = ('.png', '.jpg', '.jpeg', '.bmp', '.webp', '.tiff')
 SUPPORTED_VIDEO_FORMATS = ('.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm')
 
-def is_image_file(path: str):
-    """
-    Check if a file is an image.
-    """
-    return path.endswith(SUPPORTED_IMAGE_FORMATS)
 
-def is_video_file(path: str):
-    """
-    Check if a file is a video.
-    """
-    return path.endswith(SUPPORTED_VIDEO_FORMATS)
+def _is_image_file(path: str) -> bool:
+    return path.lower().endswith(SUPPORTED_IMAGE_FORMATS)
 
 
-def process_input(file_path: str, output_file: str, model: str, method: str, logger: dict):
-    frames = []
+def _is_video_file(path: str) -> bool:
+    return path.lower().endswith(SUPPORTED_VIDEO_FORMATS)
 
-    if is_image_file(file_path):
-        print(f"Processing image {file_path}...")
-        with timed_section("Image load time", logger):
-            frames.append(read_image(file_path))
-    elif is_video_file(file_path):
-        print(f"Processing video {file_path}...")
-        with timed_section("Video load time", logger):
-            frames = extract_frames(file_path)
-        with timed_section("Video metadata extraction time", logger):
-            fps, size = get_video_metadata(file_path)
+
+def _process_image(bd: BlurDaddy, input_path: str, output_path: str) -> None:
+    """Process a single image through the API."""
+    result = bd.blur(input_path)
+    result.save(output_path)
+    print(f"Detected {len(result.detections)} face(s)")
+
+
+def _process_video(bd: BlurDaddy, input_path: str, output_path: str) -> None:
+    """Process a video frame-by-frame through the API."""
+    from tqdm import tqdm
+
+    frames = extract_frames(input_path)
+    fps, size = get_video_metadata(input_path)
+
+    output_frames = []
+    for frame in tqdm(frames, desc="Processing frames"):
+        result = bd.blur(frame)
+        # Convert RGB result back to BGR for video writing
+        import cv2
+        output_frames.append(cv2.cvtColor(result.image, cv2.COLOR_RGB2BGR))
+
+    write_video(output_frames, output_path, fps, size)
+    print(f"Processed {len(frames)} frames")
+
+
+def main(args):
+    bd = BlurDaddy(model=args.model, method=args.method)
+
+    t0 = time.perf_counter()
+
+    if _is_image_file(args.input):
+        print(f"Processing image {args.input}...")
+        _process_image(bd, args.input, args.output)
+    elif _is_video_file(args.input):
+        print(f"Processing video {args.input}...")
+        _process_video(bd, args.input, args.output)
     else:
         raise ValueError(
             f"Unsupported file type. Supported image formats: {SUPPORTED_IMAGE_FORMATS}. "
             f"Supported video formats: {SUPPORTED_VIDEO_FORMATS}."
         )
 
-    output_frames = []
-    for i, frame in enumerate(tqdm(frames, desc="Processing frames", total=len(frames))):
-        image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        with timed_section("Face detection time", logger):
-            if model == "mtcnn":
-                boxes, _, landmarks = detect_faces_mtcnn(image_rgb)
-            elif model == "yolov8n-face":
-                boxes, _, landmarks = detect_faces_yolo(image_rgb)
-            else:
-                raise ValueError("Unsupported model. Supported models: mtcnn, yolov8n-face.")
-        if DEBUG:
-            print(f"Detected {len(boxes) if boxes is not None else 0} faces in the frame {i+1}.")
-
-        with timed_section("Blurring time", logger):
-            if boxes is not None:
-                if method == 'gaussian':
-                    frame = apply_rect_gaussian_blur(frame, boxes)
-                elif method == 'elliptical':
-                    frame = apply_elliptical_gaussian_blur(frame, boxes, landmarks)
-                elif method == 'pixelation':
-                    frame = apply_rect_pixelation(frame, boxes)
-                else:
-                    raise ValueError("Unsupported method. Supported methods: gaussian, elliptical, pixelation.")
-
-        output_frames.append(frame)
-
-    with timed_section("Output time", logger):
-        if len(output_frames) == 1:
-            save_image(output_frames[0], output_file)
-        else:
-            write_video(output_frames, output_file, fps, size)
-
-    return logger
-
-def main(args):
-    logger = {}
-
-    with timed_section("Total processing time", logger):
-        logger = process_input(args.input, args.output, args.model, args.method, logger)
-
+    elapsed = time.perf_counter() - t0
     print(f"Saved output to {args.output}")
+    print(f"Total time: {elapsed:.2f}s | Memory: {get_memory_usage()} MB")
 
-    print("Performance Metrics:")
-    print(f"Memory usage: {get_memory_usage()} MB")
-    print(f"Total processing time: {logger['Total processing time']:.2f} seconds")
-    for metric, time_value in logger.items():
-        print(f"{metric}: {time_value:.2f} seconds")
 
 def _build_parser():
     parser = argparse.ArgumentParser(description="Blur faces in an image or video.")
