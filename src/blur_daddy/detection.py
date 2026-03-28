@@ -5,8 +5,15 @@ import torch
 from facenet_pytorch import MTCNN
 from ultralytics import YOLO
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-mtcnn = MTCNN(keep_all=True, device=device)
+_mtcnn_model = None
+
+
+def _get_mtcnn_model():
+    global _mtcnn_model
+    if _mtcnn_model is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        _mtcnn_model = MTCNN(keep_all=True, device=device)
+    return _mtcnn_model
 
 def _find_models_dir():
     """Find models/ dir by walking up from this file until we find it."""
@@ -44,7 +51,7 @@ def detect_faces_mtcnn(image):
             - boxes: A list of bounding boxes for the detected faces [x1, y1, x2, y2] or None if no faces detected
             - probs: A list of detection probabilities for each face or None if no faces detected
     """
-    boxes, probs, landmarks = mtcnn.detect(image, landmarks=True)
+    boxes, probs, landmarks = _get_mtcnn_model().detect(image, landmarks=True)
     return boxes, probs, landmarks
 
 def detect_faces_yolo(image):

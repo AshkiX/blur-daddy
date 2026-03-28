@@ -53,20 +53,25 @@ blur-daddy --input photo.jpg --output blurred.jpg --model mtcnn
 ## Python API
 
 ```python
-from blur_daddy.detection import detect_faces_yolo
-from blur_daddy.blur import apply_rect_gaussian_blur
-from blur_daddy.image import read_image, save_image
-import cv2
+# One-liner
+import blur_daddy
+blur_daddy.blur("photo.jpg", "blurred.jpg")
+```
 
-# Load and detect
-image = read_image("photo.jpg")
-image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-boxes, confs, _ = detect_faces_yolo(image_rgb)
+```python
+# With control
+from blur_daddy import BlurDaddy
 
-# Blur and save
-if boxes:
-    result = apply_rect_gaussian_blur(image, boxes)
-    save_image(result, "blurred.jpg")
+bd = BlurDaddy(model="yolov8n-face", method="elliptical")
+
+# Preview detections
+preview = bd.detect("photo.jpg")
+preview.faces         # [Face(id='face-0', ...), Face(id='face-1', ...)]
+preview.save("preview.jpg")  # annotated image with numbered boxes
+
+# Blur, but keep face-0 (e.g. yourself)
+result = bd.blur("photo.jpg", keep=[preview.faces[0]])
+result.save("blurred.jpg")
 ```
 
 ## Blur Methods

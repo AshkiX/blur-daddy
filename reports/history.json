@@ -43,5 +43,20 @@
       "Pixelation": 0.0,
       "Elliptical blur": 0.038
     }
+  },
+  {
+    "name": "M2.5",
+    "timestamp": "2026-03-28T15:07:23.096778+00:00",
+    "total": 91,
+    "passed": 91,
+    "failed": 0,
+    "skipped": 0,
+    "perf": {
+      "YOLO detect": 0.255,
+      "MTCNN detect": 0.781,
+      "Gaussian blur": 0.013,
+      "Pixelation": 0.001,
+      "Elliptical blur": 0.033
+    }
   }
 ]
