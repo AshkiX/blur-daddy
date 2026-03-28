@@ -48,6 +48,51 @@ class TestModels:
         assert os.path.exists(path)
 
 
+class TestResultAccessors:
+    def test_detection_result_boxes_shape(self, sample_image_path):
+        from blur_daddy import BlurDaddy
+
+        result = BlurDaddy().detect(sample_image_path)
+        assert result.boxes.shape[1] == 4
+        assert result.boxes.shape[0] == len(result.detections)
+        assert result.boxes.dtype == np.float32
+
+    def test_detection_result_conf_shape(self, sample_image_path):
+        from blur_daddy import BlurDaddy
+
+        result = BlurDaddy().detect(sample_image_path)
+        assert result.conf.shape == (len(result.detections),)
+        assert all(0 <= c <= 1 for c in result.conf)
+
+    def test_detection_result_plot(self, sample_image_path):
+        from blur_daddy import BlurDaddy
+
+        result = BlurDaddy().detect(sample_image_path)
+        plotted = result.plot()
+        assert isinstance(plotted, np.ndarray)
+        assert plotted.shape == result.image.shape
+
+    def test_blur_result_plot(self, sample_image_path):
+        from blur_daddy import BlurDaddy
+
+        result = BlurDaddy().blur(sample_image_path)
+        plotted = result.plot()
+        assert isinstance(plotted, np.ndarray)
+        assert plotted.shape == result.image.shape
+
+    def test_blur_result_boxes(self, sample_image_path):
+        from blur_daddy import BlurDaddy
+
+        result = BlurDaddy().blur(sample_image_path)
+        assert result.boxes.shape[1] == 4
+        assert result.conf.shape[0] == result.boxes.shape[0]
+
+    def test_empty_detections_boxes(self):
+        result = DetectionResult(image=np.zeros((10, 10, 3), dtype=np.uint8))
+        assert result.boxes.shape == (0, 4)
+        assert result.conf.shape == (0,)
+
+
 class TestBlurDaddyInit:
     def test_default_params(self):
         from blur_daddy import BlurDaddy

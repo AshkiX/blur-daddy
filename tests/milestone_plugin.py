@@ -1,11 +1,10 @@
-"""Pytest plugin that generates visual milestone reports.
+"""Pytest plugin that generates visual milestone reports as Markdown.
 
 Usage:
     uv run pytest --milestone-report M0
-    open reports/M0.html
+    # produces reports/M0.md + reports/M0/*.png
 """
 
-import base64
 import json
 import time
 from collections import defaultdict
@@ -58,6 +57,8 @@ def pytest_sessionfinish(session, exitstatus):
     results = session.config._ms_results
 
     REPORTS_DIR.mkdir(exist_ok=True)
+    images_dir = REPORTS_DIR / name
+    images_dir.mkdir(exist_ok=True)
 
     # --- Aggregate test results ---
     modules = defaultdict(lambda: {"passed": 0, "failed": 0, "skipped": 0, "tests": []})
@@ -80,8 +81,8 @@ def pytest_sessionfinish(session, exitstatus):
     # --- Performance benchmarks ---
     perf = _run_benchmarks()
 
-    # --- Visual samples (before/after blurred images) ---
-    samples = _generate_visual_samples()
+    # --- Visual samples ---
+    sample_files = _generate_visual_samples(images_dir)
 
     # --- Build milestone data ---
     milestone_data = {
@@ -96,16 +97,15 @@ def pytest_sessionfinish(session, exitstatus):
 
     # --- Update history ---
     history = _load_history()
-    # Replace existing entry for this milestone, or append
     history = [h for h in history if h["name"] != name]
     history.append(milestone_data)
     history.sort(key=lambda h: h["name"])
     _save_history(history)
 
-    # --- Render HTML ---
-    html = _render_html(name, milestone_data, modules, perf, samples, history)
-    report_path = REPORTS_DIR / f"{name}.html"
-    report_path.write_text(html)
+    # --- Render Markdown ---
+    md = _render_markdown(name, milestone_data, modules, perf, sample_files, history)
+    report_path = REPORTS_DIR / f"{name}.md"
+    report_path.write_text(md)
 
     print(f"\n{'='*60}")
     print(f"  Milestone report: {report_path}")
@@ -160,15 +160,12 @@ def _run_benchmarks():
 
 
 # ---------------------------------------------------------------------------
-# Visual samples
+# Visual samples — saves PNGs to images_dir
 # ---------------------------------------------------------------------------
 
-def _generate_visual_samples():
-    """Run the blur pipeline on the sample image using the high-level API.
-
-    Generates diverse samples that showcase the latest API features.
-    """
-    samples = {}
+def _generate_visual_samples(images_dir):
+    """Generate sample images and save as PNGs. Returns list of (label, filename)."""
+    samples = []
     try:
         from blur_daddy import BlurDaddy
 
@@ -183,13 +180,18 @@ def _generate_visual_samples():
                 return cv2.resize(img, None, fx=scale, fy=scale)
             return img
 
-        def _rgb_to_bgr_b64(rgb_img):
-            return _img_to_b64(_resize(cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)))
+        def _save_rgb(rgb_img, filename):
+            bgr = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(str(images_dir / filename), _resize(bgr))
+
+        def _save_bgr(bgr_img, filename):
+            cv2.imwrite(str(images_dir / filename), _resize(bgr_img))
 
         # 1. Original
-        samples["Original"] = _img_to_b64(_resize(img_bgr))
+        _save_bgr(img_bgr, "original.png")
+        samples.append(("Original", "original.png"))
 
-        # 2. Detection preview (annotated with numbered boxes)
+        # 2. Detection preview
         bd = BlurDaddy()
         preview = bd.detect(str(SAMPLE_IMAGE))
         if not preview.faces:
@@ -200,28 +202,27 @@ def _generate_visual_samples():
             x1, y1, x2, y2 = face.box_int
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(annotated, face.id, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        samples["detect()"] = _rgb_to_bgr_b64(annotated)
+        _save_rgb(annotated, "detect.png")
+        samples.append(("detect()", "detect.png"))
 
         # 3. Three blur methods
         for method in ("gaussian", "pixelation", "elliptical"):
             bd_m = BlurDaddy(method=method)
             result = bd_m.blur(str(SAMPLE_IMAGE))
-            samples[f"blur(method='{method}')"] = _rgb_to_bgr_b64(result.image)
+            filename = f"blur_{method}.png"
+            _save_rgb(result.image, filename)
+            samples.append((f"blur(method='{method}')", filename))
 
-        # 4. keep= demo: blur all except face-0
+        # 4. keep= demo
         if len(preview.faces) >= 2:
             result_keep = bd.blur(str(SAMPLE_IMAGE), keep=[preview.faces[0]])
-            samples["blur(keep=[face-0])"] = _rgb_to_bgr_b64(result_keep.image)
+            _save_rgb(result_keep.image, "blur_keep.png")
+            samples.append(("blur(keep=[face-0])", "blur_keep.png"))
 
     except Exception:
         pass
 
     return samples
-
-
-def _img_to_b64(img):
-    _, buf = cv2.imencode(".png", img)
-    return base64.b64encode(buf).decode("ascii")
 
 
 # ---------------------------------------------------------------------------
@@ -239,195 +240,77 @@ def _save_history(history):
 
 
 # ---------------------------------------------------------------------------
-# HTML rendering (self-contained, no Jinja2 dependency)
+# Markdown rendering
 # ---------------------------------------------------------------------------
 
-def _render_html(name, data, modules, perf, samples, history):
+def _render_markdown(name, data, modules, perf, sample_files, history):
     passed, failed, skipped, total = data["passed"], data["failed"], data["skipped"], data["total"]
-    status_color = "#22c55e" if failed == 0 else "#ef4444"
-    status_text = "ALL PASSING" if failed == 0 else f"{failed} FAILING"
-
-    # --- Module rows ---
-    module_rows = ""
-    for mod_name, mod in sorted(modules.items()):
-        p, f, s = mod["passed"], mod["failed"], mod["skipped"]
-        bar_w = 100
-        pw = int(p / max(p + f + s, 1) * bar_w)
-        fw = int(f / max(p + f + s, 1) * bar_w)
-        sw = bar_w - pw - fw
-        icon = "\u2705" if f == 0 else "\u274c"
-        module_rows += f"""
-        <tr>
-            <td>{icon} {mod_name}</td>
-            <td>{p}</td><td>{f}</td><td>{s}</td>
-            <td>
-                <div class="bar">
-                    <div class="bar-pass" style="width:{pw}%"></div>
-                    <div class="bar-fail" style="width:{fw}%"></div>
-                    <div class="bar-skip" style="width:{sw}%"></div>
-                </div>
-            </td>
-        </tr>"""
-
-    # --- Failed test details ---
-    failed_section = ""
-    if failed > 0:
-        failed_tests = [r for r in data.get("_results", []) if not r["passed"] and not r["skipped"]]
-        if failed_tests:
-            rows = "".join(f"<li><code>{t['nodeid']}</code></li>" for t in failed_tests)
-            failed_section = f'<div class="card"><h2>Failed Tests</h2><ul>{rows}</ul></div>'
-
-    # --- Perf table ---
-    perf_rows = ""
-    for op, secs in perf.items():
-        if op == "error":
-            continue
-        bar_max = max(perf.values()) if perf else 1
-        pct = secs / bar_max * 100 if bar_max else 0
-        perf_rows += f"""
-        <tr>
-            <td>{op}</td>
-            <td>{secs:.3f}s</td>
-            <td><div class="perf-bar" style="width:{pct}%"></div></td>
-        </tr>"""
-
-    # --- Visual samples ---
-    sample_cards = ""
-    for label, b64 in samples.items():
-        sample_cards += f"""
-        <div class="sample-card">
-            <img src="data:image/png;base64,{b64}" alt="{label}">
-            <div class="sample-label">{label}</div>
-        </div>"""
-
-    # --- History trend (simple ASCII-style bar chart in HTML) ---
-    trend_rows = ""
-    max_tests = max((h["total"] for h in history), default=1)
-    arrow = " \u2190 current"
-    for h in history:
-        is_current = h["name"] == name
-        pct = h["passed"] / max(max_tests, 1) * 100
-        fpct = h["failed"] / max(max_tests, 1) * 100
-        bold = "font-weight:700;" if is_current else ""
-        current_marker = arrow if is_current else ""
-        trend_rows += f"""
-        <tr style="{bold}">
-            <td>{h['name']}{current_marker}</td>
-            <td>{h['total']}</td>
-            <td>{h['passed']}</td>
-            <td>{h['failed']}</td>
-            <td>
-                <div class="bar">
-                    <div class="bar-pass" style="width:{pct}%"></div>
-                    <div class="bar-fail" style="width:{fpct}%"></div>
-                </div>
-            </td>
-        </tr>"""
-
+    status = "ALL PASSING" if failed == 0 else f"{failed} FAILING"
     timestamp = datetime.fromisoformat(data["timestamp"]).strftime("%Y-%m-%d %H:%M UTC")
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blur Daddy — {name} Report</title>
-<style>
-  :root {{
-    --bg: #0f172a; --surface: #1e293b; --border: #334155;
-    --text: #e2e8f0; --muted: #94a3b8;
-    --green: #22c55e; --red: #ef4444; --yellow: #eab308; --blue: #3b82f6;
-  }}
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{ font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
-         background: var(--bg); color: var(--text); padding: 2rem; line-height: 1.6; }}
-  h1 {{ font-size: 1.8rem; margin-bottom: 0.25rem; }}
-  h2 {{ font-size: 1.1rem; margin-bottom: 1rem; color: var(--muted); font-weight: 500; }}
-  .header {{ text-align: center; margin-bottom: 2rem; }}
-  .header .status {{ display: inline-block; padding: 0.25rem 1rem; border-radius: 999px;
-                     font-size: 0.85rem; font-weight: 700; letter-spacing: 0.05em;
-                     background: {status_color}22; color: {status_color}; border: 1px solid {status_color}44; }}
-  .header .meta {{ color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; }}
-  .stats {{ display: flex; gap: 1rem; justify-content: center; margin: 1.5rem 0; flex-wrap: wrap; }}
-  .stat {{ background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-           padding: 1rem 1.5rem; text-align: center; min-width: 120px; }}
-  .stat .num {{ font-size: 2rem; font-weight: 700; }}
-  .stat .label {{ font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }}
-  .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-           padding: 1.5rem; margin-bottom: 1.5rem; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
-  th {{ text-align: left; color: var(--muted); font-weight: 500; padding: 0.5rem 0.75rem;
-       border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase;
-       letter-spacing: 0.05em; }}
-  td {{ padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border)22; }}
-  .bar {{ display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); }}
-  .bar-pass {{ background: var(--green); }}
-  .bar-fail {{ background: var(--red); }}
-  .bar-skip {{ background: var(--yellow); }}
-  .perf-bar {{ height: 8px; border-radius: 4px; background: var(--blue); min-width: 2px; }}
-  .samples {{ display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; }}
-  .sample-card {{ background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-                  overflow: hidden; max-width: 320px; }}
-  .sample-card img {{ width: 100%; display: block; }}
-  .sample-label {{ padding: 0.5rem; text-align: center; font-size: 0.8rem; color: var(--muted); }}
-  .grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }}
-  @media (max-width: 768px) {{ .grid {{ grid-template-columns: 1fr; }} }}
-  a {{ color: var(--blue); }}
-</style>
-</head>
-<body>
+    lines = [
+        f"# {name} — Milestone Report",
+        "",
+        f"**{timestamp}** | **{status}** | {total} total | {passed} passed | {failed} failed | {skipped} skipped",
+        "",
+    ]
 
-<div class="header">
-    <h1>blur-daddy / {name}</h1>
-    <div class="meta">{timestamp}</div>
-    <div style="margin-top:0.75rem"><span class="status">{status_text}</span></div>
-</div>
+    # --- Tests by module ---
+    lines.append("## Tests by Module")
+    lines.append("")
+    lines.append("| Module | Pass | Fail | Skip | Status |")
+    lines.append("|--------|------|------|------|--------|")
+    for mod_name, mod in sorted(modules.items()):
+        p, f, s = mod["passed"], mod["failed"], mod["skipped"]
+        icon = "pass" if f == 0 else "FAIL"
+        lines.append(f"| {mod_name} | {p} | {f} | {s} | {icon} |")
+    lines.append("")
 
-<div class="stats">
-    <div class="stat"><div class="num" style="color:var(--text)">{total}</div><div class="label">Total</div></div>
-    <div class="stat"><div class="num" style="color:var(--green)">{passed}</div><div class="label">Passed</div></div>
-    <div class="stat"><div class="num" style="color:var(--red)">{failed}</div><div class="label">Failed</div></div>
-    <div class="stat"><div class="num" style="color:var(--yellow)">{skipped}</div><div class="label">Skipped</div></div>
-</div>
+    # --- Failed tests ---
+    if failed > 0:
+        failed_tests = []
+        for r in data.get("_results", []):
+            if not r.get("passed") and not r.get("skipped"):
+                failed_tests.append(r)
+        if failed_tests:
+            lines.append("## Failed Tests")
+            lines.append("")
+            for t in failed_tests:
+                lines.append(f"- `{t['nodeid']}`")
+            lines.append("")
 
-{failed_section}
+    # --- Performance ---
+    if perf and "error" not in perf:
+        lines.append("## Performance")
+        lines.append("")
+        lines.append("| Operation | Time |")
+        lines.append("|-----------|------|")
+        for op, secs in perf.items():
+            lines.append(f"| `{op}` | {secs:.3f}s |")
+        lines.append("")
 
-<div class="grid">
-<div class="card">
-    <h2>Tests by Module</h2>
-    <table>
-        <tr><th>Module</th><th>Pass</th><th>Fail</th><th>Skip</th><th>Distribution</th></tr>
-        {module_rows}
-    </table>
-</div>
+    # --- Visual samples ---
+    if sample_files:
+        lines.append("## Visual Samples")
+        lines.append("")
+        # Row of images as a table
+        headers = " | ".join(label for label, _ in sample_files)
+        separator = " | ".join("---" for _ in sample_files)
+        images = " | ".join(f"![{label}]({name}/{filename})" for label, filename in sample_files)
+        lines.append(f"| {headers} |")
+        lines.append(f"| {separator} |")
+        lines.append(f"| {images} |")
+        lines.append("")
 
-<div class="card">
-    <h2>Performance (seconds)</h2>
-    <table>
-        <tr><th>Operation</th><th>Time</th><th></th></tr>
-        {perf_rows}
-    </table>
-</div>
-</div>
+    # --- Milestone trend ---
+    lines.append("## Milestone Trend")
+    lines.append("")
+    lines.append("| Milestone | Total | Passed | Failed |")
+    lines.append("|-----------|-------|--------|--------|")
+    for h in history:
+        marker = " **<- current**" if h["name"] == name else ""
+        lines.append(f"| {h['name']}{marker} | {h['total']} | {h['passed']} | {h['failed']} |")
+    lines.append("")
 
-<div class="card">
-    <h2>Visual Output Samples</h2>
-    <div class="samples">
-        {sample_cards if sample_cards else '<p style="color:var(--muted)">No sample images available.</p>'}
-    </div>
-</div>
-
-<div class="card">
-    <h2>Milestone Trend</h2>
-    <table>
-        <tr><th>Milestone</th><th>Total</th><th>Pass</th><th>Fail</th><th>Trend</th></tr>
-        {trend_rows}
-    </table>
-</div>
-
-<div style="text-align:center; margin-top:2rem; color:var(--muted); font-size:0.75rem;">
-    Generated by <code>pytest --milestone-report {name}</code>
-</div>
-
-</body>
-</html>"""
+    lines.append(f"---\n*Generated by `pytest --milestone-report {name}`*")
+    return "\n".join(lines)

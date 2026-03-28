@@ -46,18 +46,18 @@
   },
   {
     "name": "M2.5",
-    "timestamp": "2026-03-28T15:12:01.652843+00:00",
+    "timestamp": "2026-03-28T15:19:28.605494+00:00",
     "total": 91,
     "passed": 91,
     "failed": 0,
     "skipped": 0,
     "perf": {
-      "detect(model='yolov8n-face')": 0.377,
-      "detect(model='mtcnn')": 0.942,
-      "blur(method='gaussian')": 0.343,
-      "blur(method='pixelation')": 0.272,
-      "blur(method='elliptical')": 0.556,
-      "blur(keep=[face-0])": 0.237
+      "detect(model='yolov8n-face')": 0.405,
+      "detect(model='mtcnn')": 0.805,
+      "blur(method='gaussian')": 0.2,
+      "blur(method='pixelation')": 0.286,
+      "blur(method='elliptical')": 0.243,
+      "blur(keep=[face-0])": 0.282
     }
   }
 ]
