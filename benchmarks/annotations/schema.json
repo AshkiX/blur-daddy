@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Curated Video Clip Annotation",
+  "type": "object",
+  "required": ["video", "frames"],
+  "properties": {
+    "video": {
+      "type": "string",
+      "description": "Filename of the video clip (relative to annotations directory)"
+    },
+    "fps": {
+      "type": "number",
+      "description": "Video frame rate"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the clip content and why it was selected"
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["frame_idx", "faces"],
+        "properties": {
+          "frame_idx": {
+            "type": "integer",
+            "description": "0-based frame index"
+          },
+          "faces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["box"],
+              "properties": {
+                "box": {
+                  "type": "array",
+                  "items": {"type": "number"},
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "description": "[x1, y1, x2, y2] in pixel coordinates"
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Persistent face ID for tracking across frames"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
