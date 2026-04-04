@@ -5,3 +5,4 @@ venv
 local-docs/
 reports/
 tests/golden/
+benchmarks/results/

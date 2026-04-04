@@ -37,6 +37,18 @@ uv run pytest --milestone-report M3
 
 # Lint
 uv run ruff check .
+
+# Run benchmarks (micro tier, fast)
+uv run python -m benchmarks.run --tier micro
+
+# Run benchmarks (full tier, comprehensive)
+uv run python -m benchmarks.run --tier full
+
+# Benchmarks without competitors (blur-daddy only)
+uv run python -m benchmarks.run --no-competitors
+
+# Install competitor dependencies for benchmarks
+uv sync --group benchmark
 ```
 
 **CLI subcommands:**
@@ -70,6 +82,23 @@ tests/                 58 tests + milestone report plugin
 - **Elliptical blur** creates a full-image Gaussian blur, then alpha-blends it using an elliptical mask per face.
 - **Video processing** loads ALL frames into memory at once (`extract_frames`), processes each frame independently, then writes all output frames. No streaming/chunked processing yet.
 - **Blur padding**: All blur methods add 15px padding around detected face bounding boxes (`PADDING` constant in `blur.py`).
+
+### Benchmark suite (`benchmarks/`)
+
+```
+benchmarks/
+  __main__.py          Entry point (python -m benchmarks.run)
+  run.py               CLI orchestrator (--tier micro|full, --no-competitors, --no-video)
+  config.py            Paths, URLs, IoU thresholds, tier sizes
+  report.py            JSON + Markdown report generation
+  datasets/            Dataset loaders (WIDER FACE, YouTube Faces, curated clips)
+  detectors/           Detector wrappers with common Protocol interface
+  metrics/             Detection quality (mAP), performance (FPS/memory), video (flicker/consistency)
+  annotations/         Curated clip annotation schema + JSON files
+  results/             Timestamped benchmark output (JSON + Markdown)
+```
+
+Competitor detectors (centerface, insightface, mediapipe) are optional — install with `uv sync --group benchmark`. Missing deps are skipped gracefully.
 
 ### What's missing (known gaps)
 

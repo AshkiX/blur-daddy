@@ -35,6 +35,12 @@ dev = [
     "ruff>=0.4.0",
     "scikit-image>=0.24.0",
 ]
+benchmark = [
+    "deface>=1.5.0",
+    "insightface>=0.7.3",
+    "mediapipe>=0.10.0; sys_platform != 'linux' or platform_machine != 'aarch64'",
+    "onnxruntime>=1.16.0",
+]
 
 [tool.ruff]
 line-length = 120
@@ -46,6 +52,6 @@ select = ["E", "F", "I", "W"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 markers = ["docker: requires Docker daemon"]
 addopts = "-m 'not docker'"
